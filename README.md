@@ -1,187 +1,425 @@
-# LocalStack + Kinesis Project
+# Legion Emulator Kinesis
 
-Isolated project to experiment with Amazon Kinesis using LocalStack.
+A realistic banking credit event simulator that generates streaming data from real credit card datasets. This project demonstrates event-driven architecture using AWS Kinesis (via LocalStack), with advanced simulation capabilities including anomaly injection and variable latency patterns.
 
-## Why LocalStack for Kinesis?
+## Architecture Overview
 
-LocalStack provides a high-fidelity simulation of Amazon Kinesis that runs entirely on your local machine. This makes it ideal for development and learning without incurring AWS costs or requiring internet connectivity.
+The application consists of three main components:
 
-**What makes it a good simulation:**
+- Producer: Generates realistic banking credit events from a real dataset of 30,000 credit card clients and sends them to Kinesis
+- Simulators: Independent modules that inject anomalies, simulate network latency, and aggregate events in temporal windows
+- Consumer: Reads events from Kinesis stream and processes them in real-time
 
-- **API Compatibility**: LocalStack implements the official AWS Kinesis API, meaning the same `boto3` code that works locally will work in production AWS without modifications.
-- **Core Features**: Supports essential Kinesis operations including stream creation, shard management, `put_record`, `get_records`, and shard iterators.
-- **Realistic Behavior**: Maintains data ordering within shards, respects partition keys for data distribution, and implements proper sequence numbers.
-- **Persistence**: Data persists across container restarts when configured, simulating the 24-hour retention period behavior of real Kinesis.
-- **Development Workflow**: Enables rapid iteration and testing of producer/consumer patterns without the latency and cost of cloud deployments.
+All components use LocalStack to emulate AWS Kinesis locally without incurring cloud costs.
 
-**What it doesn't simulate**: Advanced features like enhanced fan-out, data retention beyond restarts (in simplified mode), and some CloudWatch metrics. For learning core Kinesis concepts and building basic streaming applications, LocalStack provides more than adequate fidelity.
+## Prerequisites
 
-## Requirements
+Before running this project, ensure you have the following installed on your system:
 
-- Docker
-- Docker Compose
-- Python 3.8+
-- AWS CLI (optional, can use Python setup script instead)
+- Docker (version 20.10 or higher)
+- Docker Compose (version 2.0 or higher)
+- Python 3.8 or higher
 
-## Quick Start
-
-1. Create and activate a Python virtual environment (recommended):
-
-Linux/Mac:
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-Windows PowerShell:
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-Windows CMD:
-```cmd
-python -m venv venv
-venv\Scripts\activate.bat
-```
-
-2. Install Python dependencies:
+You can verify your installations by running:
 
 ```bash
-pip install -r requirements.txt
-```
-
-3. Start LocalStack:
-
-```bash
-docker-compose up -d
-```
-
-4. Configure the stream:
-
-Option A - Using Python (recommended, works on all platforms):
-```bash
-python scripts/setup.py
-```
-
-Option B - Using shell scripts (requires AWS CLI):
-
-Linux/Mac
-```bash
-bash scripts/setup.sh
-```
-
-Windows PowerShell
-```powershell
-.\scripts\setup.ps1
-```
-
-5. Run the producer:
-
-```bash
-python scripts/producer.py
-```
-
-6. Run the consumer (in another terminal):
-
-```bash
-python scripts/consumer.py
-```
-
-## Useful Commands
-
-View LocalStack logs:
-```bash
-docker-compose logs -f
-```
-
-Stop LocalStack:
-```bash
-docker-compose down
-```
-
-Stop and remove data:
-```bash
-docker-compose down -v
-```
-
-List Kinesis streams:
-```bash
-aws kinesis list-streams --endpoint-url http://localhost:4566 --region us-east-1
-```
-
-Describe stream:
-```bash
-aws kinesis describe-stream --stream-name local-kinesis-stream --endpoint-url http://localhost:4566 --region us-east-1
+docker --version
+docker-compose --version
+python --version
 ```
 
 ## Project Structure
 
 ```
-.
-├── docker-compose.yml     # LocalStack configuration
-├── localstack-data/       # Persistent data (gitignored)
-├── scripts/
-│   ├── setup.py          # Initial setup script (Python, recommended)
-│   ├── setup.sh          # Initial setup script (Linux/Mac, requires AWS CLI)
-│   ├── setup.ps1         # Initial setup script (Windows, requires AWS CLI)
-│   ├── producer.py       # Producer example
-│   └── consumer.py       # Consumer example
-├── .env                   # Environment variables
-├── .gitignore
-├── requirements.txt       # Python dependencies
-└── README.md
+legion-emulator-kinesis/
+├── simulators/
+│   ├── data/
+│   │   └── credit_card_dataset.xls  # Real dataset (30,000 records)
+│   ├── banking_data_generator.py    # Generates events from real credit card dataset
+│   ├── anomaly_injector.py          # Injects synthetic anomalies into events
+│   └── latency_simulator.py         # Simulates network latency and windowing
+├── src/
+│   ├── producer.py                  # Banking event producer
+│   ├── consumer.py                  # Kinesis consumer
+│   └── setup.py                     # Kinesis stream setup script
+├── docker-compose.yml               # LocalStack orchestration
+├── requirements.txt                 # Python dependencies
+└── .env                            # Environment configuration
+```
+
+## Dataset Information
+
+This project uses the "Default of Credit Card Clients" dataset from UCI Machine Learning Repository:
+
+- 30,000 credit card client records from Taiwan (2005)
+- 23 features including demographics, payment history, billing amounts
+- Target variable: probability of default in the next month
+
+Features include:
+- Credit limit and demographic information (age, gender, education, marital status)
+- 6-month payment history
+- 6-month billing and payment amounts
+- Default risk labels
+
+## Running the Project
+
+Follow these steps to get the application up and running.
+
+### Step 1: Clone the repository
+
+If you haven't already, navigate to the project directory:
+
+```bash
+cd legion-emulator-kinesis
+```
+
+### Step 2: Set up Python environment
+
+Create and activate a virtual environment:
+
+**Linux/Mac:**
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+**Windows PowerShell:**
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Step 3: Start LocalStack
+
+Use Docker Compose to start LocalStack with Kinesis support:
+
+```bash
+docker-compose up -d
+```
+
+The `-d` flag runs the containers in detached mode. LocalStack will be available at `http://localhost:4566`.
+
+### Step 4: Create Kinesis stream
+
+Run the setup script to create and configure the Kinesis stream:
+
+```bash
+python src/setup.py
+```
+
+This script will:
+- Wait for LocalStack to be ready
+- Create a Kinesis stream named `local-kinesis-stream`
+- Verify the stream was created successfully
+
+### Step 5: Run the producer
+
+Start the banking event producer:
+
+```bash
+python src/producer.py
+```
+
+The producer will:
+- Load the credit card dataset (30,000 records)
+- Generate realistic banking events with customer demographics, credit info, and payment history
+- Inject synthetic anomalies at a configurable rate (default: 8%)
+- Simulate variable network latency
+- Send events to the Kinesis stream
+- Display statistics every 20 events
+
+### Step 6: Run the consumer
+
+In a separate terminal (with the virtual environment activated), start the consumer:
+
+```bash
+python src/consumer.py
+```
+
+The consumer will read events from Kinesis and display them in real-time.
+
+## Configuration
+
+### Producer Configuration
+
+You can customize the producer behavior by editing `src/producer.py` in the `main()` function:
+
+```python
+producer = BankingEventProducer(
+    dataset_path=dataset_path,
+    anomaly_rate=0.08,           # Adjust anomaly injection rate (0.0 to 1.0)
+    base_latency_ms=150,          # Base latency between events in milliseconds
+    network_condition='good'      # Network condition: 'excellent', 'good', 'poor', 'terrible'
+)
+
+producer.produce_events(
+    count=50,                     # Number of events to generate
+    show_details=True             # Show detailed logs for each event
+)
+```
+
+### Anomaly Types
+
+The simulator can inject six types of anomalies:
+
+1. **Unusual Credit Limit**: Extremely high, low, or negative credit limits
+2. **Payment Pattern Anomalies**: Consistent severe payment delays across all months
+3. **Billing Mismatches**: Excessive overpayments or consistent non-payment
+4. **Demographic Inconsistencies**: Invalid age or education inconsistent with age
+5. **Duplicate Events**: Potential duplicate transactions
+6. **Missing Fields**: Critical fields missing from event data
+
+### Network Conditions
+
+Pre-configured network simulation profiles:
+
+- `excellent`: 10ms base, minimal jitter, 0.1% spike probability
+- `good`: 50ms base, moderate jitter, 1% spike probability
+- `normal`: 100ms base, standard jitter, 5% spike probability
+- `poor`: 300ms base, high jitter, 15% spike probability
+- `terrible`: 1000ms base, extreme jitter, 30% spike probability
+
+### Environment Variables
+
+Create a `.env` file in the project root with the following variables:
+
+```bash
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+AWS_REGION=us-east-1
+LOCALSTACK_ENDPOINT=http://localhost:4566
+STREAM_NAME=local-kinesis-stream
+SHARD_COUNT=1
 ```
 
 ## Configuration
 
-Environment variables are defined in `.env`:
+### Producer Configuration
 
-- LOCALSTACK_ENDPOINT: LocalStack endpoint URL
-- AWS_REGION: AWS region to use
-- AWS_ACCESS_KEY_ID: AWS access key (test value for local)
-- AWS_SECRET_ACCESS_KEY: AWS secret key (test value for local)
-- STREAM_NAME: Kinesis stream name
-- SHARD_COUNT: Number of shards
+You can customize the producer behavior by editing `src/producer.py` in the `main()` function:
+
+```python
+producer = BankingEventProducer(
+    dataset_path=dataset_path,
+    anomaly_rate=0.08,           # Adjust anomaly injection rate (0.0 to 1.0)
+    base_latency_ms=150,          # Base latency between events in milliseconds
+    network_condition='good'      # Network condition: 'excellent', 'good', 'poor', 'terrible'
+)
+
+producer.produce_events(
+    count=50,                     # Number of events to generate
+    show_details=True             # Show detailed logs for each event
+)
+```
+
+### Anomaly Types
+
+The simulator can inject six types of anomalies:
+
+1. **Unusual Credit Limit**: Extremely high, low, or negative credit limits
+2. **Payment Pattern Anomalies**: Consistent severe payment delays across all months
+3. **Billing Mismatches**: Excessive overpayments or consistent non-payment
+4. **Demographic Inconsistencies**: Invalid age or education inconsistent with age
+5. **Duplicate Events**: Potential duplicate transactions
+6. **Missing Fields**: Critical fields missing from event data
+
+### Network Conditions
+
+Pre-configured network simulation profiles:
+
+- `excellent`: 10ms base, minimal jitter, 0.1% spike probability
+- `good`: 50ms base, moderate jitter, 1% spike probability
+- `normal`: 100ms base, standard jitter, 5% spike probability
+- `poor`: 300ms base, high jitter, 15% spike probability
+- `terrible`: 1000ms base, extreme jitter, 30% spike probability
+
+### Environment Variables
+
+Create a `.env` file in the project root with the following variables:
+
+```bash
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+AWS_REGION=us-east-1
+LOCALSTACK_ENDPOINT=http://localhost:4566
+STREAM_NAME=local-kinesis-stream
+SHARD_COUNT=1
+```
+
+## Example Output
+
+### Normal Event
+
+```json
+{
+  "event_id": "EVT-1-7486",
+  "event_type": "CREDIT_ASSESSMENT",
+  "timestamp": "2026-01-04T17:14:28.514482",
+  "source_system": "CREDIT_CARD_SYSTEM",
+  "customer": {
+    "customer_id": "CUST-000001",
+    "demographic": {
+      "sex": "F",
+      "education": "UNIVERSITY",
+      "marital_status": "MARRIED",
+      "age": 24
+    }
+  },
+  "credit": {
+    "credit_limit": 20000,
+    "currency": "TWD"
+  },
+  "payment_history": {
+    "september": 2,
+    "august": 2,
+    "july": -1,
+    "june": -1,
+    "may": -2,
+    "april": -2
+  },
+  "risk": {
+    "default_payment_next_month": 1,
+    "risk_level": "HIGH"
+  }
+}
+```
+
+### Event with Anomaly
+
+```json
+{
+  "event_id": "EVT-12-3421",
+  "event_type": "CREDIT_ASSESSMENT",
+  "anomaly_flags": [
+    {
+      "type": "INVALID_AGE",
+      "severity": "MEDIUM",
+      "description": "Age 5 is outside valid range"
+    }
+  ],
+  "customer": { "..." },
+  "credit": { "..." },
+  "risk": { "..." }
+}
+```
+
+## Monitoring and Logs
+
+All components use Python's logging module with consistent formatting:
+
+```
+%(asctime)s - %(name)s - %(levelname)s - %(message)s
+```
+
+The producer displays:
+- Individual event processing status
+- Anomaly detection markers
+- Latency spike warnings
+- Temporal window statistics (every 20 events)
+- Final summary with aggregated metrics
+
+To view LocalStack logs:
+
+```bash
+docker-compose logs -f
+```
+
+## Stopping the Services
+
+To stop the producer or consumer, press `Ctrl+C` in their respective terminals.
+
+To stop LocalStack:
+
+```bash
+docker-compose down
+```
+
+This stops and removes the LocalStack container while preserving the Docker image.
 
 ## Troubleshooting
 
-If LocalStack fails to start, verify Docker is running:
+### LocalStack fails to start
+
+Check if port 4566 is already in use:
+
 ```bash
-docker --version
-docker ps
+netstat -an | findstr 4566
 ```
 
-If the stream creation fails, wait a few more seconds for LocalStack to fully initialize.
+If another service is using the port, stop it or modify the port mapping in `docker-compose.yml`.
 
-If AWS CLI is not recognized in PowerShell:
-- Close all PowerShell windows and open a new one
-- Or use the Python setup script: `python scripts/setup.py`
+### Cannot load dataset
 
-If you get execution policy errors in PowerShell:
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
+Verify the dataset file exists at `simulators/data/credit_card_dataset.xls`. The file should be included in the repository.
 
-To deactivate the virtual environment when finished:
+Ensure you have the required dependencies installed:
+
 ```bash
-deactivate
+pip install pandas openpyxl xlrd
 ```
 
-To reset everything:
+### Consumer not receiving events
+
+- Verify LocalStack is running: `docker ps`
+- Verify the stream exists: `python src/setup.py`
+- Ensure the producer is running and sending events
+- Check that both producer and consumer use the same stream name
+
+### Encoding errors on Windows
+
+If you encounter encoding issues with Unicode characters, the simulators include UTF-8 configuration for Windows. If problems persist, run this in your terminal before executing scripts:
+
+```bash
+chcp 65001
+```
+
+## Development Notes
+
+The project follows these standards:
+
+- All code comments and documentation in English
+- Logging module used for operational logs (no print statements in classes)
+- Modular architecture with clear separation between simulation and streaming layers
+- Type hints used throughout for better code documentation
+
+To modify simulation behavior without changing the dataset:
+- Adjust anomaly injection rates in the producer
+- Change network conditions to simulate different scenarios
+- Modify window sizes for temporal aggregations
+
+## Clean Up
+
+To completely remove all containers and volumes:
+
 ```bash
 docker-compose down -v
-docker-compose up -d
 ```
 
-## Testing
+Note that this will delete any data stored in LocalStack.
 
-To verify everything works:
+## Use Cases
 
-1. Start LocalStack: `docker-compose up -d`
-2. Run setup script: `python scripts/setup.py`
-3. Run producer: `python scripts/producer.py` (sends 10 test messages)
-4. Run consumer: `python scripts/consumer.py` (press Ctrl+C to stop)
+This project is ideal for:
 
-You should see the consumer receiving all messages sent by the producer in real-time.
+1. **Learning Stream Processing**: Experiment with Kinesis without AWS costs
+2. **Anomaly Detection**: Train ML models with realistic synthetic anomalies
+3. **System Testing**: Simulate variable loads and network conditions
+4. **Credit Risk Analysis**: Process banking events in real-time
+5. **Event-Driven Architecture**: Practice with producer-consumer patterns
 
+## References
+
+- **Dataset**: [UCI ML Repository - Default of Credit Card Clients](https://archive.ics.uci.edu/ml/datasets/default+of+credit+card+clients)
+- **Paper**: Yeh, I. C., & Lien, C. H. (2009). The comparisons of data mining techniques for the predictive accuracy of probability of default of credit card clients. Expert Systems with Applications, 36(2), 2473-2480.
+- **LocalStack**: https://localstack.cloud/
+- **AWS Kinesis**: https://aws.amazon.com/kinesis/
+
+## Data Privacy
+
+The dataset used is public and anonymized. All data is used exclusively for educational and research purposes.
