@@ -1,0 +1,23 @@
+services:
+  localstack:
+    container_name: kinesis-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=kinesis,s3,dynamodb
+      - DEBUG=1
+      - KINESIS_PROVIDER=kinesis-mock
+      - PERSISTENCE=1
+    volumes:
+      - "localstack-data:/var/lib/localstack"
+    networks:
+      - localstack-net
+
+volumes:
+  localstack-data:
+
+networks:
+  localstack-net:
+    driver: bridge
+
