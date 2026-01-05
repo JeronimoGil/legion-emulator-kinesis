@@ -110,33 +110,47 @@
             background: #161b22;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: auto;
             border: 1px solid #30363d;
+            max-height: 600px;
         }
 
         table {
-            width: 100%;
+            width: max-content;
+            min-width: 100%;
             border-collapse: collapse;
+            font-size: 12px;
         }
 
         th,
         td {
-            padding: 12px;
+            padding: 8px 10px;
             text-align: left;
             border-bottom: 1px solid #21262d;
+            white-space: nowrap;
+            border-right: 1px solid #21262d;
+        }
+
+        th:last-child,
+        td:last-child {
+            border-right: none;
         }
 
         th {
             background: #0d1117;
             font-weight: 600;
             color: #8b949e;
-            font-size: 13px;
+            font-size: 10px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
         td {
-            font-size: 14px;
+            font-size: 12px;
             color: #c9d1d9;
         }
 
@@ -165,6 +179,17 @@
         .badge.anomaly {
             background: #9e6a03;
             color: #fff;
+        }
+
+        .section-header {
+            background: #1c2128;
+            font-weight: 700;
+            color: #58a6ff;
+            text-align: center;
+        }
+
+        .number {
+            text-align: right;
         }
 
         .loading {
@@ -208,17 +233,52 @@
             <table>
                 <thead>
                     <tr>
+                        <th colspan="5" class="section-header">EVENT INFO</th>
+                        <th colspan="5" class="section-header">CUSTOMER DEMOGRAPHICS</th>
+                        <th colspan="8" class="section-header">PAYMENT HISTORY (6 months)</th>
+                        <th colspan="6" class="section-header">BILLING AMOUNTS</th>
+                        <th colspan="6" class="section-header">PAYMENT AMOUNTS</th>
+                        <th colspan="4" class="section-header">RISK & ANOMALIES</th>
+                    </tr>
+                    <tr>
                         <th>Event ID</th>
-                        <th>Customer ID</th>
                         <th>Timestamp</th>
-                        <th>Risk Level</th>
+                        <th>Event Type</th>
+                        <th>Source System</th>
+                        <th>Customer ID</th>
+                        <th>Sex</th>
+                        <th>Age</th>
+                        <th>Education</th>
+                        <th>Marital Status</th>
                         <th>Credit Limit</th>
-                        <th>Status</th>
+                        <th>Currency</th>
+                        <th>Sep</th>
+                        <th>Aug</th>
+                        <th>Jul</th>
+                        <th>Jun</th>
+                        <th>May</th>
+                        <th>Apr</th>
+                        <th>Sep</th>
+                        <th>Aug</th>
+                        <th>Jul</th>
+                        <th>Jun</th>
+                        <th>May</th>
+                        <th>Apr</th>
+                        <th>Sep</th>
+                        <th>Aug</th>
+                        <th>Jul</th>
+                        <th>Jun</th>
+                        <th>May</th>
+                        <th>Apr</th>
+                        <th>Risk Level</th>
+                        <th>Default</th>
+                        <th>Anomalies</th>
+                        <th>Anomaly Details</th>
                     </tr>
                 </thead>
                 <tbody id="events-body">
                     <tr>
-                        <td colspan="6" class="loading">Loading...</td>
+                        <td colspan="34" class="loading">Loading...</td>
                     </tr>
                 </tbody>
             </table>
@@ -251,18 +311,45 @@
             const tbody = document.getElementById('events-body');
 
             if (events.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="loading">No events found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="34" class="loading">No events found</td></tr>';
                 return;
             }
 
             tbody.innerHTML = events.map(event => `
                 <tr>
                     <td>${event.event_id}</td>
-                    <td>${event.customer_id}</td>
                     <td>${new Date(event.timestamp).toLocaleString()}</td>
+                    <td>${event.event_type}</td>
+                    <td>${event.source_system}</td>
+                    <td>${event.customer_id}</td>
+                    <td>${event.sex}</td>
+                    <td class="number">${event.age}</td>
+                    <td>${event.education}</td>
+                    <td>${event.marital_status}</td>
+                    <td class="number">${typeof event.credit_limit === 'number' ? event.credit_limit.toLocaleString() : event.credit_limit}</td>
+                    <td>${event.currency}</td>
+                    <td class="number">${event.pay_september}</td>
+                    <td class="number">${event.pay_august}</td>
+                    <td class="number">${event.pay_july}</td>
+                    <td class="number">${event.pay_june}</td>
+                    <td class="number">${event.pay_may}</td>
+                    <td class="number">${event.pay_april}</td>
+                    <td class="number">${typeof event.bill_september === 'number' ? event.bill_september.toLocaleString() : event.bill_september}</td>
+                    <td class="number">${typeof event.bill_august === 'number' ? event.bill_august.toLocaleString() : event.bill_august}</td>
+                    <td class="number">${typeof event.bill_july === 'number' ? event.bill_july.toLocaleString() : event.bill_july}</td>
+                    <td class="number">${typeof event.bill_june === 'number' ? event.bill_june.toLocaleString() : event.bill_june}</td>
+                    <td class="number">${typeof event.bill_may === 'number' ? event.bill_may.toLocaleString() : event.bill_may}</td>
+                    <td class="number">${typeof event.bill_april === 'number' ? event.bill_april.toLocaleString() : event.bill_april}</td>
+                    <td class="number">${typeof event.payment_september === 'number' ? event.payment_september.toLocaleString() : event.payment_september}</td>
+                    <td class="number">${typeof event.payment_august === 'number' ? event.payment_august.toLocaleString() : event.payment_august}</td>
+                    <td class="number">${typeof event.payment_july === 'number' ? event.payment_july.toLocaleString() : event.payment_july}</td>
+                    <td class="number">${typeof event.payment_june === 'number' ? event.payment_june.toLocaleString() : event.payment_june}</td>
+                    <td class="number">${typeof event.payment_may === 'number' ? event.payment_may.toLocaleString() : event.payment_may}</td>
+                    <td class="number">${typeof event.payment_april === 'number' ? event.payment_april.toLocaleString() : event.payment_april}</td>
                     <td><span class="badge ${event.risk_level.toLowerCase()}">${event.risk_level}</span></td>
-                    <td>${event.credit_limit.toLocaleString()}</td>
-                    <td>${event.has_anomaly ? '<span class="badge anomaly">ANOMALY</span>' : '-'}</td>
+                    <td class="number">${event.default_payment}</td>
+                    <td>${event.has_anomaly ? '<span class="badge anomaly">' + event.anomaly_count + '</span>' : '-'}</td>
+                    <td style="max-width: 200px; white-space: normal; font-size: 10px;">${event.anomaly_types || '-'}</td>
                 </tr>
             `).join('');
         }

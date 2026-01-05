@@ -523,7 +523,6 @@ This project is ideal for:
 ## References
 
 - **Dataset**: [UCI ML Repository - Default of Credit Card Clients](https://archive.ics.uci.edu/ml/datasets/default+of+credit+card+clients)
-- **Paper**: Yeh, I. C., & Lien, C. H. (2009). The comparisons of data mining techniques for the predictive accuracy of probability of default of credit card clients. Expert Systems with Applications, 36(2), 2473-2480.
 - **LocalStack**: https://localstack.cloud/
 - **AWS Kinesis**: https://aws.amazon.com/kinesis/
 
