@@ -1,16 +1,17 @@
 # Legion Emulator Kinesis
 
-A realistic banking credit event simulator that generates streaming data from real credit card datasets. This project demonstrates event-driven architecture using AWS Kinesis (via LocalStack), with advanced simulation capabilities including anomaly injection and variable latency patterns.
+A realistic banking credit event simulator that generates streaming data from real credit card datasets. This project demonstrates event-driven architecture using AWS Kinesis (via LocalStack), with advanced simulation capabilities including anomaly injection, variable latency patterns, and DynamoDB bronze layer storage.
 
 ## Architecture Overview
 
-The application consists of three main components:
+The application consists of four main components:
 
 - Producer: Generates realistic banking credit events from a real dataset of 30,000 credit card clients and sends them to Kinesis
 - Simulators: Independent modules that inject anomalies, simulate network latency, and aggregate events in temporal windows
-- Consumer: Reads events from Kinesis stream and processes them in real-time
+- Consumer: Reads events from Kinesis stream and stores them in DynamoDB bronze layer
+- Bronze Layer: DynamoDB table for raw event storage with indexes for efficient querying
 
-All components use LocalStack to emulate AWS Kinesis locally without incurring cloud costs.
+All components use LocalStack to emulate AWS Kinesis and DynamoDB locally without incurring cloud costs.
 
 ## Prerequisites
 
@@ -28,20 +29,65 @@ docker-compose --version
 python --version
 ```
 
+## Visualization Dashboard
+
+A web dashboard is available to monitor events in real-time:
+
+```bash
+python scripts/start_dashboard.py
+```
+
+Open browser: http://localhost:5000
+
+Features:
+- Real-time metrics (total events, recent events, high risk, anomalies)
+- Event table with filters (Recent, High Risk, Anomalies)
+- Auto-refresh every 5 seconds
+- Clean and professional UI
+
 ## Project Structure
 
 ```
 legion-emulator-kinesis/
-├── simulators/
+├── config/                          # Configuration management
+│   ├── __init__.py
+│   └── settings.py                  # Centralized settings (AWS, Kinesis, DynamoDB, etc)
+│
+├── infrastructure/                  # AWS resource setup
+│   ├── __init__.py
+│   ├── kinesis_setup.py            # Kinesis stream creation
+│   └── dynamodb_setup.py           # DynamoDB table creation
+│
+├── ingestion/                       # Data producers
+│   ├── __init__.py
+│   └── banking_producer.py         # Banking event producer with simulators
+│
+├── streaming/                       # Stream consumers
+│   ├── __init__.py
+│   └── consumers/
+│       ├── __init__.py
+│       └── dynamodb_consumer.py    # Consumer that writes to DynamoDB bronze
+│
+├── analytics/                       # Queries and analysis
+│   ├── __init__.py
+│   └── bronze_queries.py           # Query engine for bronze layer
+│
+├── simulators/                      # Event simulation
+│   ├── __init__.py
 │   ├── data/
-│   │   └── credit_card_dataset.xls  # Real dataset (30,000 records)
-│   ├── banking_data_generator.py    # Generates events from real credit card dataset
-│   ├── anomaly_injector.py          # Injects synthetic anomalies into events
-│   └── latency_simulator.py         # Simulates network latency and windowing
-├── src/
-│   ├── producer.py                  # Banking event producer
-│   ├── consumer.py                  # Kinesis consumer
-│   └── setup.py                     # Kinesis stream setup script
+│   │   └── credit_card_dataset.xls # Real dataset (30,000 records)
+│   ├── banking_data_generator.py   # Generates events from dataset
+│   ├── anomaly_injector.py         # Injects synthetic anomalies
+│   └── latency_simulator.py        # Simulates network latency
+│
+├── scripts/                         # Execution scripts
+│   ├── __init__.py
+│   ├── setup_kinesis.py            # Script to setup Kinesis
+│   ├── setup_dynamodb.py           # Script to setup DynamoDB
+│   ├── start_producer.py           # Script to start producer
+│   ├── start_consumer.py           # Script to start consumer
+│   └── query_bronze.py             # Script to query bronze data
+│
 ├── docker-compose.yml               # LocalStack orchestration
 ├── requirements.txt                 # Python dependencies
 └── .env                            # Environment configuration
@@ -63,7 +109,91 @@ Features include:
 
 ## Running the Project
 
-Follow these steps to get the application up and running.
+### Automatic Virtual Environment Activation
+
+The project includes `.vscode/settings.json` configuration that automatically activates the virtual environment when opening integrated terminals in VS Code or Cursor. The virtual environment will activate automatically without manual intervention.
+
+For manual activation outside of VS Code/Cursor:
+
+```bash
+.\venv\Scripts\Activate.ps1  # Windows PowerShell
+# source venv/bin/activate    # Linux/Mac
+```
+
+### Complete workflow from start to finish:
+
+Step 1: Activate virtual environment
+```bash
+# Automatic in VS Code when opening a new terminal
+# Manual: .\venv\Scripts\Activate.ps1  # Windows PowerShell
+# Manual: source venv/bin/activate     # Linux/Mac
+```
+
+Step 2: Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+Step 3: Start LocalStack
+```bash
+docker-compose up -d
+```
+Wait 5 seconds for LocalStack to initialize.
+
+Step 4: Create Kinesis stream
+```bash
+python scripts/setup_kinesis.py
+```
+Should show: Stream created, Status: ACTIVE
+
+Step 5: Create DynamoDB table
+```bash
+python scripts/setup_dynamodb.py
+```
+Should show: Table created, Status: ACTIVE
+
+Step 6: Start Producer (Terminal 1)
+```bash
+python scripts/start_producer.py
+```
+Will show: Event 1: CUST-XXXXXX | HIGH
+Continues running indefinitely (max 2 hours)
+
+Step 7: Start Consumer (Terminal 2 - new terminal)
+```bash
+.\venv\Scripts\Activate.ps1
+python scripts/start_consumer.py
+```
+Will show: Event 1: EVT-XXX-XXXX [JSON data]
+Continues running and storing to DynamoDB
+
+Step 8: Start Dashboard (Terminal 3 - new terminal)
+```bash
+.\venv\Scripts\Activate.ps1
+python scripts/start_dashboard.py
+```
+Open browser: http://localhost:5000
+Shows real-time metrics and event table
+
+### Stopping Services
+
+**Stop Producer/Consumer/Dashboard:** Ctrl+C in each terminal
+**Stop LocalStack:** `docker-compose down`
+
+### Clean Data (Start Fresh)
+
+To delete all data and start from scratch:
+```bash
+python scripts/clean_data.py
+python scripts/setup_dynamodb.py
+```
+
+### Query Data (Command Line)
+
+To query data without dashboard:
+```bash
+python scripts/query_bronze.py
+```
 
 ### Step 1: Clone the repository
 
@@ -72,83 +202,6 @@ If you haven't already, navigate to the project directory:
 ```bash
 cd legion-emulator-kinesis
 ```
-
-### Step 2: Set up Python environment
-
-Create and activate a virtual environment:
-
-**Linux/Mac:**
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-**Windows PowerShell:**
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-### Step 3: Start LocalStack
-
-Use Docker Compose to start LocalStack with Kinesis support:
-
-```bash
-docker-compose up -d
-```
-
-The `-d` flag runs the containers in detached mode. LocalStack will be available at `http://localhost:4566`.
-
-### Step 4: Create Kinesis stream
-
-Run the setup script to create and configure the Kinesis stream:
-
-```bash
-python src/setup.py
-```
-
-This script will:
-- Wait for LocalStack to be ready
-- Create a Kinesis stream named `local-kinesis-stream`
-- Verify the stream was created successfully
-
-### Step 5: Run the producer
-
-Start the banking event producer:
-
-```bash
-python src/producer.py
-```
-
-The producer will:
-- Load the credit card dataset (30,000 records)
-- Generate realistic banking events with customer demographics, credit info, and payment history
-- Inject synthetic anomalies at a configurable rate (default: 8%)
-- Simulate variable network latency
-- Send events to the Kinesis stream in an infinite loop (cycling through the dataset)
-- Display statistics every 20 events
-- **Automatically stop after 2 hours** to prevent indefinite CPU consumption
-
-### Step 6: Run the consumer
-
-In a separate terminal (with the virtual environment activated), start the consumer:
-
-```bash
-python src/consumer.py
-```
-
-The consumer will:
-- Read events from Kinesis stream in real-time
-- Display each event with full details
-- Show remaining time periodically when waiting for records
-- **Automatically stop after 2 hours**
-- Display final statistics (records processed and runtime)
 
 ## Execution Time Limits
 
@@ -188,15 +241,13 @@ producer.produce_events(
 def consume_records(max_duration_hours: float = 2.0):  # Change this value
 ```
 
-## Quick Start (All Commands)
+## Quick Start
 
-Here's a complete workflow from setup to execution:
+Complete setup and execution:
 
 ```bash
 # 1. Activate virtual environment
-python -m venv venv
 .\venv\Scripts\Activate.ps1  # Windows PowerShell
-# source venv/bin/activate    # Linux/Mac
 
 # 2. Install dependencies
 pip install -r requirements.txt
@@ -204,35 +255,45 @@ pip install -r requirements.txt
 # 3. Start LocalStack
 docker-compose up -d
 
-# 4. Create Kinesis stream
-python src/setup.py
+# 4. Create infrastructure
+python scripts/setup_kinesis.py
+python scripts/setup_dynamodb.py
 
-# 5. Run producer (in current terminal)
-python src/producer.py
+# 5. Start producer (Terminal 1)
+python scripts/start_producer.py
 
-# 6. Run consumer (in separate terminal, remember to activate venv first)
-python src/consumer.py
+# 6. Start consumer (Terminal 2, remember to activate venv)
+python scripts/start_consumer.py
+
+# 7. Start dashboard (Terminal 3, remember to activate venv)
+python scripts/start_dashboard.py
+
+# 8. Open browser
+# http://localhost:5000
+```
+
+## Clean Data
+
+To delete all data and start fresh:
+
+```bash
+python scripts/clean_data.py
+python scripts/setup_dynamodb.py
 ```
 
 ## Configuration
 
 ### Producer Configuration
 
-You can customize the producer behavior by editing `src/producer.py` in the `main()` function:
+You can customize the producer behavior by editing configuration in `config/settings.py`:
 
 ```python
-producer = BankingEventProducer(
-    dataset_path=dataset_path,
-    anomaly_rate=0.08,           # Adjust anomaly injection rate (0.0 to 1.0)
-    base_latency_ms=150,          # Base latency between events in milliseconds
-    network_condition='good'      # Network condition: 'excellent', 'good', 'poor', 'terrible'
-)
-
-producer.produce_events(
-    count=None,                   # None = infinite (cycles through dataset), or set a number
-    show_details=True,            # Show detailed logs for each event
-    max_duration_hours=2.0        # Maximum runtime in hours
-)
+class ProducerConfig:
+    ANOMALY_RATE = 0.08              # Adjust anomaly injection rate (0.0 to 1.0)
+    BASE_LATENCY_MS = 150             # Base latency between events in milliseconds
+    NETWORK_CONDITION = 'good'        # Network condition: 'excellent', 'good', 'poor', 'terrible'
+    MAX_DURATION_HOURS = 2.0          # Maximum runtime in hours
+    SHOW_DETAILS = True               # Show detailed logs for each event
 ```
 
 ### Anomaly Types
@@ -401,7 +462,7 @@ pip install pandas openpyxl xlrd
 ### Consumer not receiving events
 
 - Verify LocalStack is running: `docker ps`
-- Verify the stream exists: `python src/setup.py`
+- Verify the stream exists: `python scripts/setup_kinesis.py`
 - Ensure the producer is running and sending events
 - Check that both producer and consumer use the same stream name
 
@@ -417,10 +478,22 @@ chcp 65001
 
 The project follows these standards:
 
+- Professional data engineering folder structure
+- Separation of concerns (config, infrastructure, ingestion, streaming, analytics)
+- Centralized configuration management
+- Modular architecture with clear interfaces
 - All code comments and documentation in English
-- Logging module used for operational logs (no print statements in classes)
-- Modular architecture with clear separation between simulation and streaming layers
+- Logging module used for operational logs
 - Type hints used throughout for better code documentation
+
+Project organization:
+- `config/`: Centralized configuration for all components
+- `infrastructure/`: AWS resource setup and provisioning
+- `ingestion/`: Data producers and event generators
+- `streaming/`: Stream consumers and processors
+- `analytics/`: Query engines and data analysis
+- `simulators/`: Event simulation modules
+- `scripts/`: Entry points for executing different components
 
 To modify simulation behavior without changing the dataset:
 - Adjust anomaly injection rates in the producer
