@@ -172,6 +172,7 @@ class AnomalyInjector:
         if not self._should_inject_anomaly():
             return event
         
+        # Six types of anomalies available for injection
         anomaly_types = [
             self._inject_unusual_credit_limit,
             self._inject_payment_pattern_anomaly,
@@ -181,6 +182,7 @@ class AnomalyInjector:
             self._inject_missing_fields
         ]
         
+        # Randomly select one anomaly type to inject
         anomaly_func = random.choice(anomaly_types)
         anomalous_event = anomaly_func(event)
         

@@ -28,10 +28,12 @@ stream_name = os.getenv('STREAM_NAME')
 shard_count = int(os.getenv('SHARD_COUNT', 1))
 
 def wait_for_localstack():
+    # Allow time for LocalStack services to initialize
     logger.info("Waiting for LocalStack to start...")
     time.sleep(5)
 
 def create_stream():
+    # Create Kinesis stream with configured shard count
     logger.info(f"Creating Kinesis stream: {stream_name}")
     
     kinesis.create_stream(

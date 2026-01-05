@@ -29,10 +29,12 @@ class LatencySimulator:
                    f"Jitter: {jitter_ms}ms, Spike prob: {spike_probability*100:.1f}%")
     
     def _calculate_latency(self) -> float:
+        # Gaussian distribution for realistic latency variation
         latency = random.gauss(self.base_latency_ms, self.jitter_ms / 2)
         
         latency = max(0, latency)
         
+        # Randomly inject latency spikes
         if random.random() < self.spike_probability:
             spike_multiplier = random.uniform(5, 20)
             latency *= spike_multiplier
@@ -75,6 +77,7 @@ class LatencySimulator:
         self.base_latency_ms = self.base_latency_ms * multiplier
     
     def simulate_network_conditions(self, condition: str) -> None:
+        # Pre-configured network profiles from excellent to terrible
         conditions = {
             'excellent': {'base': 10, 'jitter': 5, 'spike_prob': 0.001},
             'good': {'base': 50, 'jitter': 20, 'spike_prob': 0.01},

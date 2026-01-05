@@ -53,6 +53,7 @@ class BankingDataGenerator:
     def generate_credit_event(self, 
                              event_type: str = "CREDIT_ASSESSMENT",
                              base_time: Optional[datetime] = None) -> Dict:
+        # Use modulo to cycle through dataset when reaching the end
         row = self.df.iloc[self.current_index % self.total_records]
         self.current_index += 1
         
@@ -117,13 +118,19 @@ class BankingDataGenerator:
                      event_type: str = "CREDIT_ASSESSMENT",
                      start_time: Optional[datetime] = None) -> Iterator[Dict]:
         if count is None:
-            count = self.total_records
-        
-        base_time = start_time or datetime.now()
-        
-        for i in range(count):
-            current_time = base_time + timedelta(seconds=i)
-            yield self.generate_credit_event(event_type, current_time)
+            # Infinite mode: cycles through dataset continuously
+            base_time = start_time or datetime.now()
+            i = 0
+            while True:
+                current_time = base_time + timedelta(seconds=i)
+                yield self.generate_credit_event(event_type, current_time)
+                i += 1
+        else:
+            # Finite mode: generates exactly 'count' events
+            base_time = start_time or datetime.now()
+            for i in range(count):
+                current_time = base_time + timedelta(seconds=i)
+                yield self.generate_credit_event(event_type, current_time)
     
     def reset(self):
         self.current_index = 0

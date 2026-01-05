@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 import boto3
 from dotenv import load_dotenv
@@ -37,25 +38,12 @@ stream_name = os.getenv('STREAM_NAME', 'local-kinesis-stream')
 
 
 class BankingEventProducer:
-    """
-    Producer that integrates all simulation modules
-    to generate realistic banking events.
-    """
     
     def __init__(self,
                  dataset_path: str,
                  anomaly_rate: float = 0.05,
                  base_latency_ms: float = 100,
                  network_condition: str = 'good'):
-        """
-        Initialize producer with all simulators.
-        
-        Args:
-            dataset_path: Path to credit card dataset
-            anomaly_rate: Anomaly injection rate (0.0 to 1.0)
-            base_latency_ms: Base latency between events
-            network_condition: Network condition ('excellent', 'good', 'poor', 'terrible')
-        """
         logger.info("="*80)
         logger.info("INITIALIZING BANKING EVENT PRODUCER")
         logger.info("="*80)
@@ -70,20 +58,12 @@ class BankingEventProducer:
         
         self.events_sent = 0
         self.errors = 0
+        self._start_time = time.time()
         
         logger.info(f"Target stream: {stream_name}")
         logger.info("="*80)
     
     def send_to_kinesis(self, event: dict) -> bool:
-        """
-        Send an event to Kinesis.
-        
-        Args:
-            event: Banking event to send
-        
-        Returns:
-            True if sent successfully, False otherwise
-        """
         try:
             response = kinesis.put_record(
                 StreamName=stream_name,
@@ -99,53 +79,77 @@ class BankingEventProducer:
             self.errors += 1
             return False
     
-    def produce_events(self, count: int = 100, show_details: bool = True):
-        """
-        Generate and send events to Kinesis.
+    def produce_events(self, count: int = 100, show_details: bool = True, max_duration_hours: float = 2.0):
+        if count is None:
+            logger.info(f"Starting continuous event production (max {max_duration_hours}h, press Ctrl+C to stop early)...")
+            count = float('inf')
+        else:
+            logger.info(f"Starting production of {count} events...")
         
-        Args:
-            count: Number of events to generate
-            show_details: Whether to show details for each event
-        """
-        logger.info(f"Starting production of {count} events...")
         logger.info("")
         
-        for i, base_event in enumerate(self.data_generator.stream_events(count=count), 1):
-            event = self.anomaly_injector.inject(base_event)
-            
-            self.window_5min.add_event(event)
-            self.window_1hour.add_event(event)
-            
-            success = self.send_to_kinesis(event)
-            
-            if show_details:
-                has_anomaly = 'anomaly_flags' in event
-                anomaly_marker = " [ANOMALY!]" if has_anomaly else ""
-                risk = event['risk']['risk_level']
-                customer_id = event['customer']['customer_id']
+        start_time = time.time()
+        max_duration_seconds = max_duration_hours * 3600
+        i = 0
+        
+        try:
+            for base_event in self.data_generator.stream_events(count=None):
+                i += 1
                 
-                logger.info(
-                    f"Event {i}/{count}: {customer_id} | "
-                    f"Risk: {risk} | "
-                    f"Status: {'OK' if success else 'ERROR'}{anomaly_marker}"
-                )
+                # Check time limit for infinite mode
+                elapsed_time = time.time() - start_time
+                if count == float('inf') and elapsed_time >= max_duration_seconds:
+                    logger.info(f"\n\nReached maximum duration of {max_duration_hours} hours. Stopping gracefully...")
+                    break
                 
-                if has_anomaly and show_details:
-                    for flag in event['anomaly_flags']:
-                        logger.info(f"  └─ [{flag['severity']}] {flag['type']}")
-            
-            if i < count:
+                event = self.anomaly_injector.inject(base_event)
+                
+                self.window_5min.add_event(event)
+                self.window_1hour.add_event(event)
+                
+                success = self.send_to_kinesis(event)
+                
+                if show_details:
+                    has_anomaly = 'anomaly_flags' in event
+                    anomaly_marker = " [ANOMALY!]" if has_anomaly else ""
+                    risk = event['risk']['risk_level']
+                    customer_id = event['customer']['customer_id']
+                    
+                    if count == float('inf'):
+                        logger.info(
+                            f"Event {i}: {customer_id} | "
+                            f"Risk: {risk} | "
+                            f"Status: {'OK' if success else 'ERROR'}{anomaly_marker}"
+                        )
+                    else:
+                        logger.info(
+                            f"Event {i}/{count}: {customer_id} | "
+                            f"Risk: {risk} | "
+                            f"Status: {'OK' if success else 'ERROR'}{anomaly_marker}"
+                        )
+                    
+                    if has_anomaly and show_details:
+                        for flag in event['anomaly_flags']:
+                            logger.info(f"  └─ [{flag['severity']}] {flag['type']}")
+                
                 latency_info = self.latency_simulator.wait_between_events()
                 if latency_info['is_spike']:
                     logger.warning(f"  └─ Latency spike: {latency_info['actual_latency_ms']:.1f}ms")
-            
-            if i % 20 == 0:
-                self._show_window_stats()
-        
-        self._show_final_summary()
+                
+                # Show statistics every 20 events
+                if i % 20 == 0:
+                    self._show_window_stats()
+                
+                # Stop when reaching target count in finite mode
+                if count != float('inf') and i >= count:
+                    break
+                    
+        except KeyboardInterrupt:
+            logger.info("\n\nProduction stopped by user")
+        finally:
+            self._show_final_summary()
     
     def _show_window_stats(self):
-        """Display temporal window statistics."""
         logger.info("")
         logger.info("-" * 80)
         logger.info("TEMPORAL WINDOW STATISTICS")
@@ -165,7 +169,6 @@ class BankingEventProducer:
         logger.info("")
     
     def _show_final_summary(self):
-        """Display final production summary."""
         logger.info("")
         logger.info("="*80)
         logger.info("FINAL SUMMARY")
@@ -188,12 +191,17 @@ class BankingEventProducer:
         logger.info(f"Events sent to Kinesis: {self.events_sent}")
         logger.info(f"Errors: {self.errors}")
         
+        if hasattr(self, '_start_time'):
+            elapsed = time.time() - self._start_time
+            hours = int(elapsed // 3600)
+            minutes = int((elapsed % 3600) // 60)
+            seconds = int(elapsed % 60)
+            logger.info(f"Total runtime: {hours}h {minutes}m {seconds}s")
+        
         logger.info("="*80)
 
 
 def main():
-    """Main producer function."""
-    
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
     dataset_path = os.path.join(
@@ -211,8 +219,9 @@ def main():
     )
     
     producer.produce_events(
-        count=50,
-        show_details=True
+        count=None,
+        show_details=True,
+        max_duration_hours=2.0
     )
 
 
@@ -221,6 +230,7 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         logger.info("\n\nProducer stopped by user")
+        sys.exit(0)
     except Exception as e:
         logger.error(f"Fatal error: {e}", exc_info=True)
-
+        sys.exit(1)

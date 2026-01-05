@@ -131,8 +131,9 @@ The producer will:
 - Generate realistic banking events with customer demographics, credit info, and payment history
 - Inject synthetic anomalies at a configurable rate (default: 8%)
 - Simulate variable network latency
-- Send events to the Kinesis stream
+- Send events to the Kinesis stream in an infinite loop (cycling through the dataset)
 - Display statistics every 20 events
+- **Automatically stop after 2 hours** to prevent indefinite CPU consumption
 
 ### Step 6: Run the consumer
 
@@ -142,60 +143,75 @@ In a separate terminal (with the virtual environment activated), start the consu
 python src/consumer.py
 ```
 
-The consumer will read events from Kinesis and display them in real-time.
+The consumer will:
+- Read events from Kinesis stream in real-time
+- Display each event with full details
+- Show remaining time periodically when waiting for records
+- **Automatically stop after 2 hours**
+- Display final statistics (records processed and runtime)
 
-## Configuration
+## Execution Time Limits
 
-### Producer Configuration
+Both the producer and consumer have a **2-hour automatic timeout** to prevent indefinite execution and excessive CPU usage:
 
-You can customize the producer behavior by editing `src/producer.py` in the `main()` function:
+### Producer
+- Runs continuously for a maximum of 2 hours
+- Cycles through the 30,000 record dataset repeatedly
+- Shows message when time limit is reached
+- Displays final summary with runtime statistics
 
+### Consumer
+- Listens for events for a maximum of 2 hours
+- Shows remaining time in waiting messages
+- Gracefully shuts down at the 2-hour mark
+- Reports total records processed
+
+### Stopping Earlier
+
+You can stop either service at any time by pressing `Ctrl+C`. Both services will shut down gracefully and show their final statistics.
+
+### Adjusting Time Limits
+
+To modify the time limits, edit the respective files:
+
+**Producer** (`src/producer.py`):
 ```python
-producer = BankingEventProducer(
-    dataset_path=dataset_path,
-    anomaly_rate=0.08,           # Adjust anomaly injection rate (0.0 to 1.0)
-    base_latency_ms=150,          # Base latency between events in milliseconds
-    network_condition='good'      # Network condition: 'excellent', 'good', 'poor', 'terrible'
-)
-
 producer.produce_events(
-    count=50,                     # Number of events to generate
-    show_details=True             # Show detailed logs for each event
+    count=None,
+    show_details=True,
+    max_duration_hours=2.0  # Change this value (in hours)
 )
 ```
 
-### Anomaly Types
+**Consumer** (`src/consumer.py`):
+```python
+def consume_records(max_duration_hours: float = 2.0):  # Change this value
+```
 
-The simulator can inject six types of anomalies:
+## Quick Start (All Commands)
 
-1. **Unusual Credit Limit**: Extremely high, low, or negative credit limits
-2. **Payment Pattern Anomalies**: Consistent severe payment delays across all months
-3. **Billing Mismatches**: Excessive overpayments or consistent non-payment
-4. **Demographic Inconsistencies**: Invalid age or education inconsistent with age
-5. **Duplicate Events**: Potential duplicate transactions
-6. **Missing Fields**: Critical fields missing from event data
-
-### Network Conditions
-
-Pre-configured network simulation profiles:
-
-- `excellent`: 10ms base, minimal jitter, 0.1% spike probability
-- `good`: 50ms base, moderate jitter, 1% spike probability
-- `normal`: 100ms base, standard jitter, 5% spike probability
-- `poor`: 300ms base, high jitter, 15% spike probability
-- `terrible`: 1000ms base, extreme jitter, 30% spike probability
-
-### Environment Variables
-
-Create a `.env` file in the project root with the following variables:
+Here's a complete workflow from setup to execution:
 
 ```bash
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
-AWS_REGION=us-east-1
-LOCALSTACK_ENDPOINT=http://localhost:4566
-STREAM_NAME=local-kinesis-stream
-SHARD_COUNT=1
+# 1. Activate virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1  # Windows PowerShell
+# source venv/bin/activate    # Linux/Mac
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Start LocalStack
+docker-compose up -d
+
+# 4. Create Kinesis stream
+python src/setup.py
+
+# 5. Run producer (in current terminal)
+python src/producer.py
+
+# 6. Run consumer (in separate terminal, remember to activate venv first)
+python src/consumer.py
 ```
 
 ## Configuration
@@ -213,8 +229,9 @@ producer = BankingEventProducer(
 )
 
 producer.produce_events(
-    count=50,                     # Number of events to generate
-    show_details=True             # Show detailed logs for each event
+    count=None,                   # None = infinite (cycles through dataset), or set a number
+    show_details=True,            # Show detailed logs for each event
+    max_duration_hours=2.0        # Maximum runtime in hours
 )
 ```
 
@@ -322,7 +339,13 @@ The producer displays:
 - Anomaly detection markers
 - Latency spike warnings
 - Temporal window statistics (every 20 events)
-- Final summary with aggregated metrics
+- Time remaining when running in infinite mode
+- Final summary with aggregated metrics and total runtime
+
+The consumer displays:
+- Each received event with full details
+- Time remaining when waiting for records
+- Total records processed and runtime at shutdown
 
 To view LocalStack logs:
 
@@ -332,7 +355,18 @@ docker-compose logs -f
 
 ## Stopping the Services
 
-To stop the producer or consumer, press `Ctrl+C` in their respective terminals.
+### Manual Stop
+
+To stop the producer or consumer, press `Ctrl+C` in their respective terminals. Both services will:
+- Catch the interrupt signal gracefully
+- Display final summary statistics
+- Report total runtime and records processed
+
+### Automatic Stop
+
+Both services automatically stop after **2 hours** of execution to prevent indefinite CPU consumption:
+- Producer: Shows final summary with total events sent and runtime
+- Consumer: Shows total records processed and runtime
 
 To stop LocalStack:
 
